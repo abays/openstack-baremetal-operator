@@ -1,0 +1,12 @@
+apiVersion: baremetal.openstack.org/v1beta1
+kind: OpenStackBaremetalSet
+metadata:
+  labels:
+    app.kubernetes.io/name: openstackbaremetalset
+    app.kubernetes.io/instance: openstackbaremetalset-sample
+    app.kubernetes.io/part-of: openstack-baremetal-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: openstack-baremetal-operator
+  name: openstackbaremetalset-sample
+spec:
+  # TODO(user): Add fields here

@@ -19,9 +19,11 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,9 +35,15 @@ import (
 
 	"github.com/go-logr/logr"
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
+	oko_secret "github.com/openstack-k8s-operators/lib-common/modules/common/secret"
 	baremetalv1 "github.com/openstack-k8s-operators/openstack-baremetal-operator/api/v1beta1"
+	"github.com/openstack-k8s-operators/openstack-baremetal-operator/pkg/openstackbaremetalset"
+	openstackprovisionserver "github.com/openstack-k8s-operators/openstack-baremetal-operator/pkg/openstackprovisionserver"
 )
 
 // OpenStackBaremetalSetReconciler reconciles a OpenStackBaremetalSet object
@@ -111,7 +119,10 @@ func (r *OpenStackBaremetalSetReconciler) Reconcile(ctx context.Context, req ctr
 	if instance.Status.Conditions == nil {
 		instance.Status.Conditions = condition.Conditions{}
 		// initialize conditions used later as Status=Unknown
-		cl := condition.CreateList()
+		cl := condition.CreateList(
+			condition.UnknownCondition(condition.InputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
+			condition.UnknownCondition(baremetalv1.OpenStackBaremetalSetProvServerReadyCondition, condition.InitReason, baremetalv1.OpenStackBaremetalSetProvServerReadyInitMessage),
+		)
 
 		instance.Status.Conditions.Init(&cl)
 
@@ -188,6 +199,140 @@ func (r *OpenStackBaremetalSetReconciler) reconcileUpgrade(ctx context.Context, 
 
 func (r *OpenStackBaremetalSetReconciler) reconcileNormal(ctx context.Context, instance *baremetalv1.OpenStackBaremetalSet, helper *helper.Helper) (ctrl.Result, error) {
 	r.Log.Info(fmt.Sprintf("Reconciling OpenStackBaremetalSet '%s'", instance.Name))
+
+	l := log.FromContext(ctx)
+
+	// ConfigMap
+	configMapVars := make(map[string]env.Setter)
+
+	//
+	// check if a root password secret was provide and add hash to the vars map if so
+	//
+	if instance.Spec.PasswordSecret != "" {
+		ospSecret, hash, err := oko_secret.GetSecret(ctx, helper, instance.Spec.PasswordSecret, instance.Namespace)
+		if err != nil {
+			if k8s_errors.IsNotFound(err) {
+				instance.Status.Conditions.Set(condition.FalseCondition(
+					condition.InputReadyCondition,
+					condition.RequestedReason,
+					condition.SeverityInfo,
+					condition.InputReadyWaitingMessage))
+				return ctrl.Result{RequeueAfter: time.Second * 10}, fmt.Errorf("Root password secret %s not found", instance.Spec.PasswordSecret)
+			}
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.InputReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.InputReadyErrorMessage,
+				err.Error()))
+			return ctrl.Result{}, err
+		}
+		configMapVars[ospSecret.Name] = env.SetValue(hash)
+	}
+	// run check OpenStack secret - end
+
+	//
+	// check if the required deployment SSH secret is available and add hash to the vars map
+	//
+	ospSecret, hash, err := oko_secret.GetSecret(ctx, helper, instance.Spec.DeploymentSSHSecret, instance.Namespace)
+	if err != nil {
+		if k8s_errors.IsNotFound(err) {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.InputReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				condition.InputReadyWaitingMessage))
+			return ctrl.Result{RequeueAfter: time.Second * 10}, fmt.Errorf("Deployment SSH secret %s not found", instance.Spec.DeploymentSSHSecret)
+		}
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.InputReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.InputReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+	configMapVars[ospSecret.Name] = env.SetValue(hash)
+	instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
+	// run check deployment SSH secret - end
+
+	//
+	// TODO check when/if Init, Update, or Upgrade should/could be skipped
+	//
+
+	serviceLabels := labels.GetLabels(instance, openstackprovisionserver.AppLabel, map[string]string{
+		common.AppSelector: instance.Name + "-openstackbaremetalset-deployment",
+	})
+
+	// Handle service init
+	ctrlResult, err := r.reconcileInit(ctx, instance, helper, serviceLabels)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
+
+	// Handle service update
+	ctrlResult, err = r.reconcileUpdate(ctx, instance, helper)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
+
+	// Handle service upgrade
+	ctrlResult, err = r.reconcileUpgrade(ctx, instance, helper)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
+
+	//
+	// normal reconcile tasks
+	//
+
+	//
+	// either find the provided provision server or create a new one
+	//
+	var provisionServer *baremetalv1.OpenStackProvisionServer
+
+	// TODO: webook should validate that either ProvisionServerName or RhelImageUrl is set in the instance spec
+	if instance.Spec.ProvisionServerName == "" {
+		provisionServer, err = openstackbaremetalset.ProvisionServerCreateOrUpdate(ctx, helper, instance)
+	} else {
+		err = r.Client.Get(ctx, types.NamespacedName{Name: instance.Spec.ProvisionServerName, Namespace: instance.Namespace}, provisionServer)
+	}
+
+	if err != nil {
+		if k8s_errors.IsNotFound(err) {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				baremetalv1.OpenStackBaremetalSetProvServerReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				baremetalv1.OpenStackBaremetalSetProvServerReadyWaitingMessage))
+			return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("OpenStackProvisionServer %s not found", instance.Spec.ProvisionServerName)
+		}
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			baremetalv1.OpenStackBaremetalSetProvServerReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			baremetalv1.OpenStackBaremetalSetProvServerReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+
+	if provisionServer.Status.LocalImageURL == "" {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			baremetalv1.OpenStackBaremetalSetProvServerReadyCondition,
+			condition.RequestedReason,
+			condition.SeverityInfo,
+			baremetalv1.OpenStackBaremetalSetProvServerReadyRunningMessage))
+		l.Info("OpenStackProvisionServer LocalImageUrl not yet available", "OpenStackProvisionServer", provisionServer.Name)
+		return ctrl.Result{RequeueAfter: time.Duration(30) * time.Second}, nil
+	}
+	instance.Status.Conditions.MarkTrue(baremetalv1.OpenStackBaremetalSetProvServerReadyCondition, baremetalv1.OpenStackBaremetalSetProvServerReadyMessage)
+	// handle provision server - end
 
 	r.Log.Info(fmt.Sprintf("Reconciled OpenStackBaremetalSet '%s' successfully", instance.Name))
 	return ctrl.Result{}, nil

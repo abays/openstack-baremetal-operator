@@ -21,6 +21,9 @@ import (
 
 // OpenStack Baremetal Condition Types used by API objects.
 const (
+	//
+	// OpenStackProvisionServer conditions
+	//
 	// OpenStackProvisionServerReadyCondition Status=True condition which indicates if the OpenStackProvisionServer is configured and operational
 	OpenStackProvisionServerReadyCondition condition.Type = "OpenStackProvisionServerReady"
 
@@ -29,6 +32,15 @@ const (
 
 	// OpenStackProvisionServerLocalImageUrlReadyCondition Status=True condition which indicates if the OpenStackProvisionServer's LocalImageUrl has been successfully acquired from the provisioning agent
 	OpenStackProvisionServerLocalImageUrlReadyCondition condition.Type = "OpenStackProvisionServerLocalImageUrlReady"
+
+	//
+	// OpenStackBaremetalSet conditions
+	//
+	// OpenStackBaremetalSetReadyCondition Status=True condition which indicates if the OpenStackBaremetalSet is fully provisioned
+	OpenStackBaremetalSetReadyCondition condition.Type = "OpenStackBaremetalSetReady"
+
+	// OpenStackBaremetalSetProvServerReadyCondition Status=True condition which indicates if the OpenStackBaremetalSet's OpenStackProvisionServer is ready to serve its image
+	OpenStackBaremetalSetProvServerReadyCondition condition.Type = "OpenStackBaremetalSetProvServerReady"
 )
 
 // OpenStack Baremetal Reasons used by API objects.
@@ -71,4 +83,31 @@ const (
 
 	// OpenStackProvisionServerLocalImageUrlReadyMessage
 	OpenStackProvisionServerLocalImageUrlReadyMessage = "OpenStackProvisionServerLocalImageUrl generated"
+
+	//
+	// OpenStackBaremetalSetReady condition messages
+	//
+	// OpenStackBaremetalSetReadyInitMessage
+	OpenStackBaremetalSetReadyInitMessage = "OpenStackBaremetalSet not started"
+
+	// OpenStackBaremetalSetReadyErrorMessage
+	OpenStackBaremetalSetReadyErrorMessage = "OpenStackBaremetalSet error occured %s"
+
+	//
+	// OpenStackBaremetalSetProvServerReady condition messages
+	//
+	// OpenStackBaremetalSetProvServerReadyInitMessage
+	OpenStackBaremetalSetProvServerReadyInitMessage = "OpenStackBaremetalSet provision server not started"
+
+	// OpenStackBaremetalSetProvServerReadyWaitingMessage
+	OpenStackBaremetalSetProvServerReadyWaitingMessage = "OpenStackBaremetalSet waiting for provision server creation"
+
+	// OpenStackBaremetalSetProvServerReadyRunningMessage
+	OpenStackBaremetalSetProvServerReadyRunningMessage = "OpenStackBaremetalSet provision server deployment in progress"
+
+	// OpenStackBaremetalSetProvServerReadyErrorMessage
+	OpenStackBaremetalSetProvServerReadyErrorMessage = "OpenStackBaremetalSet provision server error occured %s"
+
+	// OpenStackBaremetalSetProvServerReadyMessage
+	OpenStackBaremetalSetProvServerReadyMessage = "OpenStackBaremetalSet provision server ready"
 )

@@ -23,33 +23,33 @@ import (
 
 // OpenStackBaremetalSetSpec defines the desired state of OpenStackBaremetalSet
 type OpenStackBaremetalSetSpec struct {
-	// Count The number of baremetalhosts to attempt to aquire
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:default=0
-	Count int `json:"count,omitempty"`
+	// BaremetalHosts - Map of hostname to control plane IP address for all nodes to provision
+	BaremetalHosts map[string]string `json:"baremetalHosts"`
 	// Remote URL pointing to desired RHEL qcow2 image
-	BaseImageURL string `json:"baseImageUrl,omitempty"`
+	RhelImageURL string `json:"rhelImageUrl,omitempty"`
+	// +kubebuilder:validation:Optional
 	// ProvisionServerName Optional. If supplied will be used as the base Image for the baremetalset instead of baseImageURL.
 	ProvisionServerName string `json:"provisionServerName,omitempty"`
 	// Name of secret holding the stack-admin ssh keys
 	DeploymentSSHSecret string `json:"deploymentSSHSecret"`
 	// Interface to use for ctlplane network
 	CtlplaneInterface string `json:"ctlplaneInterface"`
+	// +kubebuilder:validation:Optional
 	// BmhLabelSelector allows for a sub-selection of BaremetalHosts based on arbitrary labels
 	BmhLabelSelector map[string]string `json:"bmhLabelSelector,omitempty"`
+	// +kubebuilder:validation:Optional
 	// Hardware requests for sub-selection of BaremetalHosts with certain hardware specs
 	HardwareReqs HardwareReqs `json:"hardwareReqs,omitempty"`
-	// Networks the name(s) of the OpenStackNetworks used to generate IPs
-	Networks []string `json:"networks"`
-	// RoleName the name of the TripleO role this OpenStackBaremetalSet is associated with. If it is a TripleO role, the name must match.
-	RoleName string `json:"roleName"`
+	// +kubebuilder:validation:Optional
 	// PasswordSecret the name of the secret used to optionally set the root pwd by adding
 	// NodeRootPassword: <base64 enc pwd>
 	// to the secret data
 	PasswordSecret string `json:"passwordSecret,omitempty"`
+	// +kubebuilder:validation:Optional
 	// BootstrapDNS - initial DNS nameserver values to set on the BaremetalHosts when they are provisioned.
 	// Note that subsequent TripleO deployment will overwrite these values
 	BootstrapDNS []string `json:"bootstrapDns,omitempty"`
+	// +kubebuilder:validation:Optional
 	// DNSSearchDomains - initial DNS nameserver values to set on the BaremetalHosts when they are provisioned.
 	// Note that subsequent TripleO deployment will overwrite these values
 	DNSSearchDomains []string `json:"dnsSearchDomains,omitempty"`
@@ -98,7 +98,7 @@ type IPStatus struct {
 	Hostname string `json:"hostname"`
 
 	// +kubebuilder:default=unassigned
-	HostRef string `json:"hostRef"`
+	BmhRef string `json:"bmhRef"`
 
 	// +kubebuilder:validation:Optional
 	IPAddresses map[string]string `json:"ipaddresses"`

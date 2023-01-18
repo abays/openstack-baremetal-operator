@@ -49,9 +49,12 @@ spec:
           spec:
             description: OpenStackBaremetalSetSpec defines the desired state of OpenStackBaremetalSet
             properties:
-              baseImageUrl:
-                description: Remote URL pointing to desired RHEL qcow2 image
-                type: string
+              baremetalHosts:
+                additionalProperties:
+                  type: string
+                description: BaremetalHosts - Map of hostname to control plane IP
+                  address for all nodes to provision
+                type: object
               bmhLabelSelector:
                 additionalProperties:
                   type: string
@@ -65,11 +68,6 @@ spec:
                 items:
                   type: string
                 type: array
-              count:
-                default: 0
-                description: Count The number of baremetalhosts to attempt to aquire
-                minimum: 0
-                type: integer
               ctlplaneInterface:
                 description: Interface to use for ctlplane network
                 type: string
@@ -169,12 +167,6 @@ spec:
                         type: object
                     type: object
                 type: object
-              networks:
-                description: Networks the name(s) of the OpenStackNetworks used to
-                  generate IPs
-                items:
-                  type: string
-                type: array
               passwordSecret:
                 description: 'PasswordSecret the name of the secret used to optionally
                   set the root pwd by adding NodeRootPassword: <base64 enc pwd> to
@@ -184,15 +176,13 @@ spec:
                 description: ProvisionServerName Optional. If supplied will be used
                   as the base Image for the baremetalset instead of baseImageURL.
                 type: string
-              roleName:
-                description: RoleName the name of the TripleO role this OpenStackBaremetalSet
-                  is associated with. If it is a TripleO role, the name must match.
+              rhelImageUrl:
+                description: Remote URL pointing to desired RHEL qcow2 image
                 type: string
             required:
+            - baremetalHosts
             - ctlplaneInterface
             - deploymentSSHSecret
-            - networks
-            - roleName
             type: object
           status:
             description: OpenStackBaremetalSetStatus defines the observed state of
@@ -207,7 +197,7 @@ spec:
                       default: false
                       description: Host annotated for deletion
                       type: boolean
-                    hostRef:
+                    bmhRef:
                       default: unassigned
                       type: string
                     hostname:
@@ -225,7 +215,7 @@ spec:
                       type: string
                   required:
                   - annotatedForDeletion
-                  - hostRef
+                  - bmhRef
                   - hostname
                   - networkDataSecretName
                   - provisioningState

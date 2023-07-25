@@ -135,9 +135,8 @@ func VerifyBaremetalSetScaleUp(
 				len(availableBaremetalHosts))
 		}
 
+		l.Info("Found sufficient quantity of BaremetalHosts for scale-up of OsBaremetalSet", "OsBaremetalSet", instance.Name, "BMHs", availableBaremetalHosts)
 	}
-
-	l.Info("Found sufficient quantity of BaremetalHosts for scale-up of OsBaremetalSet", "OsBaremetalSet", instance.Name, "BMHs", availableBaremetalHosts)
 
 	return availableBaremetalHosts, nil
 }

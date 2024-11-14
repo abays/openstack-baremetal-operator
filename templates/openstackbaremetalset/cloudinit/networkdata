@@ -8,6 +8,7 @@ links:
   type: vlan
   vlan_id: {{ .CtlplaneVlan }}
   vlan_link: {{ .CtlplaneInterface }}
+  vlan_mac_address: null
 {{- end }}
 networks:
 {{- if (index . "CtlplaneVlan") }}

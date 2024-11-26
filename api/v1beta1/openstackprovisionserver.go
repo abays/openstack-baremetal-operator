@@ -7,7 +7,7 @@ import (
 	goClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// GetExistingProvServerPorts - Get all ports currently in use by all OpenStackProvisionServers
+// GetExistingProvServerPorts - Get all ports currently in use by all OpenStackProvisionServers in this namespace
 func GetExistingProvServerPorts(
 	ctx context.Context,
 	c goClient.Client,
@@ -17,7 +17,9 @@ func GetExistingProvServerPorts(
 
 	provServerList := &OpenStackProvisionServerList{}
 
-	listOpts := []goClient.ListOption{}
+	listOpts := []goClient.ListOption{
+		goClient.InNamespace(instance.Namespace),
+	}
 
 	err := c.List(ctx, provServerList, listOpts...)
 	if err != nil {
@@ -37,8 +39,12 @@ func AssignProvisionServerPort(
 	c goClient.Client,
 	instance *OpenStackProvisionServer,
 	portStart int32,
-	portEnd int32,
 ) error {
+	if instance.Spec.Port != 0 {
+		// Do nothing, already assigned
+		return nil
+	}
+
 	existingPorts, err := GetExistingProvServerPorts(ctx, c, instance)
 	if err != nil {
 		return err
@@ -46,36 +52,31 @@ func AssignProvisionServerPort(
 
 	// It's possible that this prov server already exists and we are just dealing with
 	// a minimized version of it (only its ObjectMeta is set, etc)
-	cur := existingPorts[instance.GetName()]
-	if cur == 0 {
-		cur = portStart
-	}
+	instance.Spec.Port = existingPorts[instance.GetName()]
 
-	for ; ; cur++ {
-		if cur > portEnd {
-			return fmt.Errorf("slected port is out of range %v-%v-%v", cur, portStart, portEnd)
-		}
-		found := false
-		for _, port := range existingPorts {
-			if port == cur {
-				found = true
+	// If we get this far, no port has been previously assigned, so we pick one
+	if instance.Spec.Port == 0 {
+		cur := portStart
+
+		for {
+			found := false
+
+			for _, port := range existingPorts {
+				if port == cur {
+					found = true
+					break
+				}
+			}
+
+			if !found {
 				break
 			}
+
+			cur++
 		}
 
-		if found {
-			if existingPorts[instance.GetName()] != cur {
-				return fmt.Errorf("%v port already used by another OpeStackProvisionServer", cur)
-			} else {
-				break
-			}
-		}
-
-		if !found {
-			break
-		}
-
+		instance.Spec.Port = cur
 	}
-	instance.Spec.Port = cur
+
 	return nil
 }

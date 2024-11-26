@@ -20,6 +20,9 @@ const (
 	// AppLabel -
 	AppLabel = "osp-provisionserver"
 
+	// DefaultPort - The starting default port for the OpenStackProvisionServer's Apache container
+	DefaultPort = 6190
+
 	// HttpdConfPath -
 	HttpdConfPath = "/usr/local/apache2/conf/httpd.conf"
 )

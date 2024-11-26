@@ -71,12 +71,9 @@ type OpenStackBaremetalSetSpec struct {
 	// +kubebuilder:default=metadata
 	// +kubebuilder:validation:Optional
 	AutomatedCleaningMode AutomatedCleaningMode `json:"automatedCleaningMode,omitempty"`
-	// ProvisionServerName - Optional. Existing OpenStackProvisionServer to use, else one would be created.
+	// ProvisionServerName - Optional. If supplied will be used as the base Image for the baremetalset instead of baseImageURL.
 	// +kubebuilder:validation:Optional
 	ProvisionServerName string `json:"provisionServerName,omitempty"`
-	// +kubebuilder:validation:Optional
-	// ProvisonServerNodeSelector to target subset of worker nodes running provision server
-	ProvisonServerNodeSelector map[string]string `json:"provisionServerNodeSelector,omitempty"`
 	// ProvisioningInterface - Optional. If not provided along with ProvisionServerName, it would be discovered from CBO.  This is the provisioning interface on the OCP masters/workers.
 	// +kubebuilder:validation:Optional
 	ProvisioningInterface string `json:"provisioningInterface,omitempty"`
@@ -91,6 +88,9 @@ type OpenStackBaremetalSetSpec struct {
 	// +kubebuilder:default="255.255.255.0"
 	// CtlplaneNetmask - Netmask to use for ctlplane network (TODO: acquire this is another manner?)
 	CtlplaneNetmask string `json:"ctlplaneNetmask,omitempty"`
+	// +kubebuilder:validation:Optional
+	// CtlplaneVlan - Vlan for ctlplane network
+	CtlplaneVlan *int `json:"ctlplaneVlan,omitempty"`
 	// +kubebuilder:default=openshift-machine-api
 	// +kubebuilder:validation:Optional
 	// BmhNamespace Namespace to look for BaremetalHosts(default: openshift-machine-api)
